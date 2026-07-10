@@ -1,0 +1,8 @@
+
+# Ignore folders
+.venv/
+
+# Ignore files
+hosts.yaml
+secrets.yaml
+test.yaml
