@@ -1,0 +1,89 @@
+
+- name: Install OnlyOffice Document Server using Docker
+  hosts: all
+  become: true
+
+  vars:
+    onlyoffice_image: "onlyoffice/documentserver" 
+    onlyoffice_version: "9.3.1.2" # latest was last found out to be broken, currently.
+
+    onlyoffice_container_name: "onlyoffice-documentserver"
+    
+    
+  vars_files:
+    - secrets.yaml
+
+
+  tasks:
+
+    ### Currently done manually, but:
+    # Add tasks to set up Apache
+    # Add tasks to set up proxy in the virtual host file
+    # Cert is handled by container, no need for that.
+    # Maybe once it runs do some localhost check
+
+    
+
+
+    - name: Install required packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+        state: present
+        update_cache: true
+
+
+
+
+    - name: Add Docker GPG key
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /usr/share/keyrings/docker.asc
+        mode: '0644'
+
+
+    - name: Add Docker repository
+      ansible.builtin.apt_repository:
+        repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+
+
+    - name: Install Docker engine
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        update_cache: true
+
+
+
+
+    - name: Pull OnlyOffice Docker image
+      community.docker.docker_image:
+        name: "{{ onlyoffice_image }}"
+        source: pull
+
+
+    - name: Run OnlyOffice Document Server container (HTTPS)
+      community.docker.docker_container:
+        name: "{{ onlyoffice_container_name }}"
+        image: "{{ onlyoffice_image }}:{{ onlyoffice_version }}"
+        restart_policy: always
+        state: started
+        ports:
+          - "{{ server_ip }}:{{ onlyoffice_http_port }}:80"
+          - "{{ server_ip }}:{{ onlyoffice_https_port }}:443"
+        env:
+          LETS_ENCRYPT_DOMAIN: "{{ lets_encrypt_onlyoffice_domain }}"
+          LETS_ENCRYPT_MAIL: "{{ lets_encrypt_email }}"
+          JWT_SECRET: "{{ onlyoffice_jwt_secret }}"
+
+
+# All done, now just connect OnlyOffice instance in NextCloud with the given JWT. :)
