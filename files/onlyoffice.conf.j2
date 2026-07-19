@@ -1,0 +1,10 @@
+<VirtualHost *:80>
+    ServerName {{ onlyoffice_domain }}
+
+    # Forward ONLY the ACME challenge path to the container
+    ProxyPass /.well-known/acme-challenge/ http://127.0.0.1:{{ onlyoffice_http_port }}/.well-known/acme-challenge/
+    ProxyPassReverse /.well-known/acme-challenge/ http://127.0.0.1:{{ onlyoffice_http_port }}/.well-known/acme-challenge/
+
+    # Everything else can redirect to HTTPS
+    Redirect / https://{{ onlyoffice_domain }}:{{ onlyoffice_https_port }}/
+</VirtualHost>

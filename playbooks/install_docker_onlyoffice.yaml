@@ -1,4 +1,8 @@
 
+### NOTES:
+# The container runs on any given port directly but due to how I personally like to use Apache2 and the container running in NginX I need to use a proxy to pass the cerbot requests from the container directly to it.
+# The container expects to run on port 80 and 443 so that's why this construction is needed to make it work for my specific implementation.
+
 - name: Install OnlyOffice Document Server using Docker
   hosts: all
   become: true
@@ -8,23 +12,22 @@
     onlyoffice_version: "9.3.1.2" # latest was last found out to be broken, currently.
 
     onlyoffice_container_name: "onlyoffice-documentserver"
-    
-    
+
   vars_files:
-    - secrets.yaml
+    - ../secrets.yaml # Load the other more private information.
 
 
   tasks:
 
     ### Currently done manually, but:
-    # Add tasks to set up Apache
-    # Add tasks to set up proxy in the virtual host file
-    # Cert is handled by container, no need for that.
-    # Maybe once it runs do some localhost check
+    # DONE    Add tasks to set up Apache.
+    # DONE    Add tasks to set up proxy in the virtual host file.
+    # DONE    Maybe once it runs do some localhost check to verify an connection.
+    #         Add some option to omit running the container with a proxy if port 443 and 80 are used directly.
+    #         Make a new random JWT and return it once
 
-    
 
-
+    ### GENERAL TASKS AND PREPARATION
     - name: Install required packages
       apt:
         name:
@@ -32,10 +35,9 @@
           - ca-certificates
           - curl
           - software-properties-common
+          - apache2
         state: present
         update_cache: true
-
-
 
 
     - name: Add Docker GPG key
@@ -44,14 +46,12 @@
         dest: /usr/share/keyrings/docker.asc
         mode: '0644'
 
-
     - name: Add Docker repository
       ansible.builtin.apt_repository:
         repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
         state: present
 
-
-    - name: Install Docker engine
+    - name: Install Docker engine and components
       apt:
         name:
           - docker-ce
@@ -65,13 +65,42 @@
 
 
 
+    ### APACHE2 RELATED
+    - name: Enable required Apache2 modules
+      community.general.apache2_module:
+        state: present
+        name: "{{ item }}"
+      loop:
+        - proxy
+        - proxy_http
+
+    - name: Deploy OnlyOffice Apache virtual host file
+      template:
+        src: "../files/onlyoffice.conf.j2"
+        dest: /etc/apache2/sites-available/{{ onlyoffice_domain }}.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Enable virtual host
+      ansible.builtin.command: a2ensite {{ onlyoffice_domain }}.conf
+      become: true
+
+    - name: Reload Apache2
+      ansible.builtin.systemd_service:
+        name: apache2.service
+        state: reloaded
+
+
+
+
+    ### DOCKER RELATED
     - name: Pull OnlyOffice Docker image
       community.docker.docker_image:
         name: "{{ onlyoffice_image }}"
         source: pull
 
-
-    - name: Run OnlyOffice Document Server container (HTTPS)
+    - name: Run OnlyOffice container (HTTPS)
       community.docker.docker_container:
         name: "{{ onlyoffice_container_name }}"
         image: "{{ onlyoffice_image }}:{{ onlyoffice_version }}"
@@ -86,4 +115,24 @@
           JWT_SECRET: "{{ onlyoffice_jwt_secret }}"
 
 
-# All done, now just connect OnlyOffice instance in NextCloud with the given JWT. :)
+
+
+    ### VERIFY
+    - name: Wait for OnlyOffice container to start
+      pause:
+        seconds: 15
+
+    - name: Check OnlyOffice container is running
+      uri:
+        url: "https://{{ onlyoffice_domain }}:{{ onlyoffice_https_port }}/"
+        method: GET
+        return_content: no
+        status_code: 200
+      register: onlyoffice_health
+      retries: 3
+      delay: 3
+      until: onlyoffice_health.status == 200
+      delegate_to: localhost
+
+
+### All done, now just connect OnlyOffice plugin in NextCloud with the given JWT. :)
