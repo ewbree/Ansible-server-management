@@ -10,12 +10,10 @@
   vars:
     onlyoffice_image: "onlyoffice/documentserver" 
     onlyoffice_version: "9.3.1.2" # latest was last found out to be broken, currently.
-
     onlyoffice_container_name: "onlyoffice-documentserver"
 
   vars_files:
     - ../secrets.yaml # Load the other more private information.
-
 
   tasks:
 
@@ -25,7 +23,6 @@
     # DONE    Maybe once it runs do some localhost check to verify an connection.
     #         Add some option to omit running the container with a proxy if port 443 and 80 are used directly.
     #         Make a new random JWT and return it once
-
 
     ### GENERAL TASKS AND PREPARATION
     - name: Install required packages
@@ -38,7 +35,6 @@
           - apache2
         state: present
         update_cache: true
-
 
     - name: Add Docker GPG key
       ansible.builtin.get_url:
@@ -63,8 +59,6 @@
         update_cache: true
 
 
-
-
     ### APACHE2 RELATED
     - name: Enable required Apache2 modules
       community.general.apache2_module:
@@ -76,7 +70,7 @@
 
     - name: Deploy OnlyOffice Apache virtual host file
       template:
-        src: "../files/onlyoffice.conf.j2"
+        src: "../files/onlyoffice_virtualhost.conf.j2"
         dest: /etc/apache2/sites-available/{{ onlyoffice_domain }}.conf
         owner: root
         group: root
@@ -90,8 +84,6 @@
       ansible.builtin.systemd_service:
         name: apache2.service
         state: reloaded
-
-
 
 
     ### DOCKER RELATED
@@ -115,8 +107,6 @@
           JWT_SECRET: "{{ onlyoffice_jwt_secret }}"
 
 
-
-
     ### VERIFY
     - name: Wait for OnlyOffice container to start
       pause:
@@ -133,6 +123,5 @@
       delay: 3
       until: onlyoffice_health.status == 200
       delegate_to: localhost
-
 
 ### All done, now just connect OnlyOffice plugin in NextCloud with the given JWT. :)
