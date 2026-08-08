@@ -1,0 +1,51 @@
+
+###
+### Based on the manual update instructions on Pterodactyl's documentation:
+### https://pterodactyl.io/wings/1.0/upgrading.html
+###
+
+- name: Update Pterodactyl Wings
+  hosts: all
+  become: true
+
+  vars:
+    wings_download_url: "https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_amd64" # FOR x86_64!
+    # wings_download_url: "https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_arm64" # FOR arm64!
+
+    wings_binary_path: /usr/local/bin/wings
+    
+    wings_service: wings
+
+
+  tasks:
+
+    ## Download Updated Binary
+    - name: Stop Wings service
+      systemd:
+        name: "{{ wings_service }}"
+        state: stopped
+
+    - name: Download latest Wings binary
+      get_url:
+        url: "{{ wings_download_url }}"
+        dest: "{{ wings_binary_path }}"
+        mode: "0744"
+        force: yes
+
+    - name: Ensure correct permissions on Wings binary
+      file:
+        path: "{{ wings_binary_path }}"
+        mode: "0744"
+        owner: root
+        group: root
+
+    - name: Make wings binary executable if not already # Probably not needed, but better safe than sorry.
+      command: "chmod u+x {{ wings_binary_path }}"
+        
+
+    ## Restart Process
+    - name: Start Wings service
+      systemd:
+        name: "{{ wings_service }}"
+        state: started
+        enabled: yes
