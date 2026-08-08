@@ -1,6 +1,6 @@
 
 ###
-### Based on the maunal update instruction on Pterodactyl's documentation:
+### Based on the manual update instructions on Pterodactyl's documentation:
 ### https://pterodactyl.io/panel/1.0/updating.html
 ###
 
@@ -18,9 +18,6 @@
 
     release_url: "https://github.com/pterodactyl/panel/releases/latest/download/panel.tar.gz" # Usually stick to latest
 
-  # vars_files:
-  #   - ../secrets.yaml # Load the other more private information.
-
 
   tasks:
 
@@ -35,7 +32,6 @@
     - name: Download latest panel release
       get_url:
         url: "{{ release_url }}"
-        # dest: "{{ panel_path }}"
         dest: "/tmp/panel.tar.gz"
         mode: "0644"
 
