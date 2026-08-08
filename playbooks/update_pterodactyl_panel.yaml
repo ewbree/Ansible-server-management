@@ -4,19 +4,18 @@
 ### https://pterodactyl.io/panel/1.0/updating.html
 ###
 
-
 - name: Update Pterodactyl Panel
   hosts: all
   become: true
 
   vars:
+    release_url: "https://github.com/pterodactyl/panel/releases/latest/download/panel.tar.gz" # Usually stick to latest
+    
     panel_path: /var/www/pterodactyl
     
     # 'www-data' if using NGINX or Apache (not on CentOS)  //  'nginx' if using NGINX on CentOS  //  'apache' if using Apache on CentOS
     web_user: www-data
     web_group: www-data
-
-    release_url: "https://github.com/pterodactyl/panel/releases/latest/download/panel.tar.gz" # Usually stick to latest
 
 
   tasks:
