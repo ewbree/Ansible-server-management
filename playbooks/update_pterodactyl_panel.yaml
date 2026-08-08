@@ -1,0 +1,107 @@
+
+###
+### Based on the maunal update instruction on Pterodactyl's documentation:
+### https://pterodactyl.io/panel/1.0/updating.html
+###
+
+
+- name: Update Pterodactyl Panel
+  hosts: all
+  become: true
+
+  vars:
+    panel_path: /var/www/pterodactyl
+    
+    # 'www-data' if using NGINX or Apache (not on CentOS)  //  'nginx' if using NGINX on CentOS  //  'apache' if using Apache on CentOS
+    web_user: www-data
+    web_group: www-data
+
+    release_url: "https://github.com/pterodactyl/panel/releases/latest/download/panel.tar.gz" # Usually stick to latest
+
+  # vars_files:
+  #   - ../secrets.yaml # Load the other more private information.
+
+
+  tasks:
+
+    ### Enter Maintenance Mode
+    - name: Enter maintenance mode
+      command: php artisan down
+      args:
+        chdir: "{{ panel_path }}"
+
+
+    ### Download the Update
+    - name: Download latest panel release
+      get_url:
+        url: "{{ release_url }}"
+        # dest: "{{ panel_path }}"
+        dest: "/tmp/panel.tar.gz"
+        mode: "0644"
+
+    - name: Extract panel release
+      unarchive:
+        src: "/tmp/panel.tar.gz"
+        dest: "{{ panel_path }}"
+        remote_src: yes # Unpacks archive as it already exists on the target with prior task.
+
+    - name: Fix permissions for storage and cache
+      file:
+        path: "{{ item }}"
+        mode: "0755"
+        recurse: yes
+      loop:
+        - "{{ panel_path }}/storage"
+        - "{{ panel_path }}/bootstrap/cache"
+
+    - name: Delete the downloaded .tar.gz file
+      ansible.builtin.file:
+        path: "/tmp/panel.tar.gz"
+        state: absent
+
+
+    ### Update Dependencies
+    - name: Install composer dependencies
+      command: composer install --no-dev --optimize-autoloader
+      args:
+        chdir: "{{ panel_path }}"
+
+
+    ### Clear Compiled Template Cache
+    - name: Clear compiled template cache
+      command: "{{ item }}"
+      args:
+        chdir: "{{ panel_path }}"
+      loop:
+        - php artisan view:clear
+        - php artisan config:clear
+
+
+    ### Database Updates
+    - name: Run database migrations & seed
+      command: php artisan migrate --seed --force
+      args:
+        chdir: "{{ panel_path }}"
+
+
+    ### Set Permissions
+    - name: Set correct ownership for panel files
+      file:
+        path: "{{ panel_path }}"
+        owner: "{{ web_user }}"
+        group: "{{ web_group }}"
+        recurse: yes
+
+
+    ### Restarting Queue Workers
+    - name: Restart queue workers
+      command: php artisan queue:restart
+      args:
+        chdir: "{{ panel_path }}"
+
+
+    ### Exit Maintenance Mode
+    - name: Exit maintenance mode
+      command: php artisan up
+      args:
+        chdir: "{{ panel_path }}"
