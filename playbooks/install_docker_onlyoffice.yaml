@@ -4,17 +4,14 @@
 # The container expects to run on port 80 and 443 so that's why this construction is needed to make it work for my specific implementation.
 
 - name: Install OnlyOffice Document Server using Docker
-  hosts: all
+  hosts: public
   become: true
 
   vars:
     onlyoffice_image: "onlyoffice/documentserver" 
-    
-    ### latest was last found out to be broken, currently.
-    # onlyoffice_version: "9.3.1.2" # Last known to work with Librewolf
     onlyoffice_version: "latest"
 
-    onlyoffice_container_name: "onlyoffice-documentserver-{{ onlyoffice_version }}"
+    onlyoffice_container_name: "onlyoffice-documentserver"
 
   vars_files:
     - ../secrets.yaml # Load the other more private information.
@@ -28,6 +25,7 @@
     #         Add some option to omit running the container with a proxy if port 443 and 80 are used directly.
     #         Make a new random JWT and return it once
     #         Make it so old container is disabled and perhaps removed if needed.
+
 
     ### GENERAL TASKS AND PREPARATION
     - name: Install required packages
@@ -92,9 +90,14 @@
 
 
     ### DOCKER RELATED
+    # - name: Remove old OnlyOffice container if it exists
+    #   community.docker.docker_container:
+    #     name: "{{ onlyoffice_container_name }}"
+    #     state: absent
+
     - name: Pull OnlyOffice Docker image
       community.docker.docker_image:
-        name: "{{ onlyoffice_image }}"
+        name: "{{ onlyoffice_image }}:{{ onlyoffice_version }}"
         source: pull
 
     - name: Run OnlyOffice container (HTTPS)
@@ -103,6 +106,7 @@
         image: "{{ onlyoffice_image }}:{{ onlyoffice_version }}"
         restart_policy: always
         state: started
+        recreate: true
         ports:
           - "0.0.0.0:{{ onlyoffice_http_port }}:80"
           - "0.0.0.0:{{ onlyoffice_https_port }}:443"
