@@ -39,15 +39,11 @@
         owner: root
         group: root
 
-    - name: Make wings binary executable if not already # Probably not needed, but better safe than sorry.
-      command: "chmod u+x {{ wings_binary_path }}"
-        
 
     ## Reload systemd daemon after new binary is in place
     - name: Reload systemd daemon to pick up new binary
       systemd:
         daemon_reload: true
-
     ## Restart Process
     - name: Start Wings service
       systemd:
