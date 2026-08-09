@@ -9,8 +9,12 @@
 
   vars:
     onlyoffice_image: "onlyoffice/documentserver" 
-    onlyoffice_version: "9.3.1.2" # latest was last found out to be broken, currently.
-    onlyoffice_container_name: "onlyoffice-documentserver"
+    
+    ### latest was last found out to be broken, currently.
+    # onlyoffice_version: "9.3.1.2" # Last known to work with Librewolf
+    onlyoffice_version: "latest"
+
+    onlyoffice_container_name: "onlyoffice-documentserver-{{ onlyoffice_version }}"
 
   vars_files:
     - ../secrets.yaml # Load the other more private information.
@@ -23,6 +27,7 @@
     # DONE    Maybe once it runs do some localhost check to verify an connection.
     #         Add some option to omit running the container with a proxy if port 443 and 80 are used directly.
     #         Make a new random JWT and return it once
+    #         Make it so old container is disabled and perhaps removed if needed.
 
     ### GENERAL TASKS AND PREPARATION
     - name: Install required packages
@@ -99,10 +104,10 @@
         restart_policy: always
         state: started
         ports:
-          - "{{ server_ip }}:{{ onlyoffice_http_port }}:80"
-          - "{{ server_ip }}:{{ onlyoffice_https_port }}:443"
+          - "0.0.0.0:{{ onlyoffice_http_port }}:80"
+          - "0.0.0.0:{{ onlyoffice_https_port }}:443"
         env:
-          LETS_ENCRYPT_DOMAIN: "{{ lets_encrypt_onlyoffice_domain }}"
+          LETS_ENCRYPT_DOMAIN: "{{ onlyoffice_domain }}"
           LETS_ENCRYPT_MAIL: "{{ lets_encrypt_email }}"
           JWT_SECRET: "{{ onlyoffice_jwt_secret }}"
 
