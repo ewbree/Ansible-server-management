@@ -9,8 +9,8 @@
   become: true
 
   vars:
-    wings_download_url: "https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_amd64" # FOR x86_64!
-    # wings_download_url: "https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_arm64" # FOR arm64!
+    wings_arch: "{{ 'amd64' if ansible_facts.machine == 'x86_64' else 'arm64' }}"
+    wings_download_url: "https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_{{ wings_arch }}"
 
     wings_binary_path: /usr/local/bin/wings
     
