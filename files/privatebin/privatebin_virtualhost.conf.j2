@@ -1,0 +1,24 @@
+<VirtualHost *:80>
+    ServerName {{ privatebin_domain }}
+    Redirect permanent / https://{{ privatebin_domain }}/
+</VirtualHost>
+
+
+<VirtualHost *:443>
+    ServerName {{ privatebin_domain }}
+
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/{{ privatebin_domain }}/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/{{ privatebin_domain }}/privkey.pem
+
+    # Security headers recommended for PrivateBin
+    Header always set X-Frame-Options "DENY"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "no-referrer"
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none';"
+
+    # Reverse proxy to PrivateBin container
+    ProxyPreserveHost On
+    ProxyPass        / http://127.0.0.1:{{ privatebin_https_proxy_port }}/
+    ProxyPassReverse / http://127.0.0.1:{{ privatebin_https_proxy_port }}/
+</VirtualHost>

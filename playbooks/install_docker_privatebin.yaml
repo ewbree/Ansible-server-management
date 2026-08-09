@@ -1,0 +1,177 @@
+
+- name: Install Privatebin using Docker
+  hosts: public
+  become: true
+
+  vars:
+    privatebin_path: "/opt/privatebin"
+    privatebin_owner: 65534 # Container uses this owner, anything else might break it!
+    privatebin_group: 82 # Container uses this group, anything else might break it!
+
+    privatebin_image: "privatebin/nginx-fpm-alpine"
+    privatebin_image_version: "latest"
+
+    privatebin_container_name: "privatebin"
+
+  vars_files:
+    - ../secrets.yaml # Load the other more private information.
+
+
+  tasks:
+
+    ### GENERAL TASKS AND PREPARATION
+    - name: Install required packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+          - apache2
+        state: present
+        update_cache: true
+
+    - name: Add Docker GPG key
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /usr/share/keyrings/docker.asc
+        mode: '0644'
+
+    - name: Add Docker repository
+      ansible.builtin.apt_repository:
+        repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+
+    - name: Install Docker engine and components
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        update_cache: true
+
+
+
+
+    ### --- APACHE2 ---
+    - name: Enable required Apache2 modules
+      community.general.apache2_module:
+        state: present
+        name: "{{ item }}"
+      loop:
+        - proxy
+        - proxy_http
+
+    - name: Deploy OnlyOffice Apache virtual host file
+      template:
+        src: "../files/privatebin/privatebin_virtualhost.conf.j2"
+        dest: /etc/apache2/sites-available/{{ privatebin_domain }}.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Enable virtual host
+      ansible.builtin.command: a2ensite {{ privatebin_domain }}.conf
+      become: true
+
+    - name: Reload Apache2
+      ansible.builtin.systemd_service:
+        name: apache2.service
+        state: reloaded
+
+
+    ### --- CERTBOT ---
+    - name: Install Certbot and Apache plugin
+      apt:
+        name:
+          - certbot
+          - python3-certbot-apache
+        state: present
+        update_cache: true
+
+    - name: Obtain certificate using Certbot
+      ansible.builtin.command: >
+        certbot --apache -n --agree-tos --redirect
+        -m {{ lets_encrypt_email }}
+        -d {{ privatebin_domain }}
+      register: certbot_result
+      changed_when: "'Congratulations' in certbot_result.stdout"
+
+    - name: Reload Apache after Certbot
+      ansible.builtin.systemd_service:
+        name: apache2.service
+        state: reloaded
+
+
+
+
+    ### --- CONTAINER CONFIG SETUP ---
+    - name: Ensure PrivateBin directories exists
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ privatebin_owner }}"
+        group: "{{ privatebin_group }}"
+        mode: "0755"
+        recurse: yes
+      loop:
+        - "{{ privatebin_path }}/data"
+        - "{{ privatebin_path }}/cfg"
+
+    - name: Create .htaccess file and populate with data
+      copy:
+        dest: "{{ privatebin_path }}/cfg/.htaccess"
+        content: Require all denied
+        owner: "{{ privatebin_owner }}"
+        group: "{{ privatebin_group }}"
+        mode: '0755'
+
+    - name: Deploy Privatebin conf file
+      template:
+        src: "../files/privatebin/conf.php.j2"
+        dest: "{{ privatebin_path }}/cfg/conf.php"
+        owner: "{{ privatebin_owner }}"
+        group: "{{ privatebin_group }}"
+        mode: '0755'
+
+
+    ### --- DOCKER ---
+    - name: Pull OnlyOffice Docker image
+      community.docker.docker_image:
+        name: "{{ privatebin_image }}:{{ privatebin_image_version }}"
+        source: pull
+
+    - name: Run PrivateBin container
+      community.docker.docker_container:
+        name: "{{ privatebin_container_name }}"
+        image: "{{ privatebin_image }}:{{ privatebin_image_version }}"
+        restart_policy: always
+        state: started
+        recreate: true
+        ports:
+          - "127.0.0.1:{{ privatebin_https_proxy_port }}:8080" # Will need an HTTPS proxy to be used this way as it only runs in HTTP by itself. Change left port to anything you want in secrets file.
+        volumes: # Volumes are used for easier to modify configuration as well as persistent stored data upon container renewal.
+          - "{{ privatebin_path }}/data:/srv/data" # Actual stored userdata
+          - "{{ privatebin_path }}/cfg:/srv/cfg"   # Config files
+        # user: "{{ privatebin_owner }}:{{ privatebin_group }}" # Not recommended to change as container can break in the long run
+
+
+    ### --- VERIFY ---
+    - name: Wait for Privatebin container to start
+      pause:
+        seconds: 15
+
+    - name: Check Privatebin container is running
+      uri:
+        url: "https://{{ privatebin_domain }}/"
+        method: GET
+        return_content: no
+        status_code: 200
+      register: privatebin_health
+      retries: 3
+      delay: 3
+      until: privatebin_health.status == 200
+      delegate_to: localhost
