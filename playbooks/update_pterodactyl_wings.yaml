@@ -1,4 +1,4 @@
-
+---
 ###
 ### Based on the manual update instructions on Pterodactyl's documentation:
 ### https://pterodactyl.io/wings/1.0/upgrading.html
@@ -13,7 +13,7 @@
     wings_download_url: "https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_{{ wings_arch }}"
 
     wings_binary_path: /usr/local/bin/wings
-    
+
     wings_service: wings
 
 
@@ -30,7 +30,7 @@
         url: "{{ wings_download_url }}"
         dest: "{{ wings_binary_path }}"
         mode: "0744"
-        force: yes
+        force: true
 
     - name: Ensure correct permissions on Wings binary
       file:
@@ -53,4 +53,4 @@
       systemd:
         name: "{{ wings_service }}"
         state: started
-        enabled: yes
+        enabled: true
