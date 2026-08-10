@@ -1,4 +1,4 @@
-
+---
 ### NOTES:
 # The container runs on any given port directly but due to how I personally like to use Apache2 and the container running in NginX I need to use a proxy to pass the cerbot requests from the container directly to it.
 # The container expects to run on port 80 and 443 so that's why this construction is needed to make it work for my specific implementation.
@@ -8,13 +8,13 @@
   become: true
 
   vars:
-    onlyoffice_image: "onlyoffice/documentserver" 
+    onlyoffice_image: "onlyoffice/documentserver"
     onlyoffice_version: "latest"
 
     onlyoffice_container_name: "onlyoffice-documentserver"
 
   vars_files:
-    - ../secrets.yaml # Load the other more private information.
+    - ../secrets.yaml  # Load the other more private information.
 
   tasks:
 
@@ -125,7 +125,7 @@
       uri:
         url: "https://{{ onlyoffice_domain }}:{{ onlyoffice_https_port }}/"
         method: GET
-        return_content: no
+        return_content: false
         status_code: 200
       register: onlyoffice_health
       retries: 3
