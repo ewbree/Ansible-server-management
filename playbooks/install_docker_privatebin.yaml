@@ -65,7 +65,7 @@
         - proxy
         - proxy_http
 
-    - name: Deploy OnlyOffice Apache virtual host file
+    - name: Deploy PrivateBin Apache virtual host file
       template:
         src: "../files/privatebin/privatebin_virtualhost.conf.j2"
         dest: /etc/apache2/sites-available/{{ privatebin_domain }}.conf
@@ -139,7 +139,7 @@
 
 
     ### --- DOCKER ---
-    - name: Pull OnlyOffice Docker image
+    - name: Pull PrivateBin Docker image
       community.docker.docker_image:
         name: "{{ privatebin_image }}:{{ privatebin_image_version }}"
         source: pull
