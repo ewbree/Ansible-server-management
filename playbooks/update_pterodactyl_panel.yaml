@@ -1,4 +1,4 @@
-
+---
 ###
 ### Based on the manual update instructions on Pterodactyl's documentation:
 ### https://pterodactyl.io/panel/1.0/updating.html
@@ -9,10 +9,10 @@
   become: true
 
   vars:
-    release_url: "https://github.com/pterodactyl/panel/releases/latest/download/panel.tar.gz" # Usually stick to latest
-    
+    release_url: "https://github.com/pterodactyl/panel/releases/latest/download/panel.tar.gz"  # Usually stick to latest
+
     panel_path: /var/www/pterodactyl
-    
+
     # 'www-data' if using NGINX or Apache (not on CentOS)  //  'nginx' if using NGINX on CentOS  //  'apache' if using Apache on CentOS
     web_user: www-data
     web_group: www-data
@@ -38,13 +38,13 @@
       unarchive:
         src: "/tmp/panel.tar.gz"
         dest: "{{ panel_path }}"
-        remote_src: yes # Unpacks archive as it already exists on the target with prior task.
+        remote_src: true  # Unpacks archive as it already exists on the target with prior task.
 
     - name: Fix permissions for storage and cache
       file:
         path: "{{ item }}"
         mode: "0755"
-        recurse: yes
+        recurse: true
       loop:
         - "{{ panel_path }}/storage"
         - "{{ panel_path }}/bootstrap/cache"
@@ -85,7 +85,7 @@
         path: "{{ panel_path }}"
         owner: "{{ web_user }}"
         group: "{{ web_group }}"
-        recurse: yes
+        recurse: true
 
 
     ### Restarting Queue Workers

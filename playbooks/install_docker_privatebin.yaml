@@ -1,12 +1,12 @@
-
+---
 - name: Install Privatebin using Docker
   hosts: public
   become: true
 
   vars:
     privatebin_path: "/opt/privatebin"
-    privatebin_owner: 65534 # Container uses this owner, anything else might break it!
-    privatebin_group: 82 # Container uses this group, anything else might break it!
+    privatebin_owner: 65534  # Container uses this owner, anything else might break it!
+    privatebin_group: 82  # Container uses this group, anything else might break it!
 
     privatebin_image: "privatebin/nginx-fpm-alpine"
     privatebin_image_version: "latest"
@@ -14,7 +14,7 @@
     privatebin_container_name: "privatebin"
 
   vars_files:
-    - ../secrets.yaml # Load the other more private information.
+    - ../secrets.yaml  # Load the other more private information.
 
 
   tasks:
@@ -52,8 +52,6 @@
           - docker-compose-plugin
         state: present
         update_cache: true
-
-
 
 
     ### --- APACHE2 ---
@@ -106,8 +104,6 @@
         state: reloaded
 
 
-
-
     ### --- CONTAINER CONFIG SETUP ---
     - name: Ensure PrivateBin directories exists
       file:
@@ -116,7 +112,7 @@
         owner: "{{ privatebin_owner }}"
         group: "{{ privatebin_group }}"
         mode: "0755"
-        recurse: yes
+        recurse: true
       loop:
         - "{{ privatebin_path }}/data"
         - "{{ privatebin_path }}/cfg"
@@ -152,11 +148,11 @@
         state: started
         recreate: true
         ports:
-          - "127.0.0.1:{{ privatebin_https_proxy_port }}:8080" # Will need an HTTPS proxy to be used this way as it only runs in HTTP by itself. Change left port to anything you want in secrets file.
-        volumes: # Volumes are used for easier to modify configuration as well as persistent stored data upon container renewal.
-          - "{{ privatebin_path }}/data:/srv/data" # Actual stored userdata
-          - "{{ privatebin_path }}/cfg:/srv/cfg"   # Config files
-        # user: "{{ privatebin_owner }}:{{ privatebin_group }}" # Not recommended to change as container can break in the long run
+          - "127.0.0.1:{{ privatebin_https_proxy_port }}:8080"  # Will need an HTTPS proxy to be used this way as it only runs in HTTP by itself. Change left port to anything you want in secrets file.
+        volumes:  # Volumes are used for easier to modify configuration as well as persistent stored data upon container renewal.
+          - "{{ privatebin_path }}/data:/srv/data"  # Actual stored userdata
+          - "{{ privatebin_path }}/cfg:/srv/cfg"    # Config files
+        # user: "{{ privatebin_owner }}:{{ privatebin_group }}"  # Not recommended to change as container can break in the long run
 
 
     ### --- VERIFY ---
@@ -168,7 +164,7 @@
       uri:
         url: "https://{{ privatebin_domain }}/"
         method: GET
-        return_content: no
+        return_content: false
         status_code: 200
       register: privatebin_health
       retries: 3
