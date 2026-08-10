@@ -29,7 +29,7 @@
 
     ### GENERAL TASKS AND PREPARATION
     - name: Install required packages
-      apt:
+      ansible.builtin.apt:
         name:
           - apt-transport-https
           - ca-certificates
