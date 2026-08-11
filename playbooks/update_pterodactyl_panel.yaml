@@ -29,19 +29,19 @@
 
     ### Download the Update
     - name: Download latest panel release
-      get_url:
+      ansible.builtin.get_url:
         url: "{{ release_url }}"
         dest: "/tmp/panel.tar.gz"
         mode: "0644"
 
     - name: Extract panel release
-      unarchive:
+      ansible.builtin.unarchive:
         src: "/tmp/panel.tar.gz"
         dest: "{{ panel_path }}"
         remote_src: true  # Unpacks archive as it already exists on the target with prior task.
 
     - name: Fix permissions for storage and cache
-      file:
+      ansible.builtin.file:
         path: "{{ item }}"
         mode: "0755"
         recurse: true
@@ -81,7 +81,7 @@
 
     ### Set Permissions
     - name: Set correct ownership for panel files
-      file:
+      ansible.builtin.file:
         path: "{{ panel_path }}"
         owner: "{{ web_user }}"
         group: "{{ web_group }}"

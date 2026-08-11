@@ -26,14 +26,14 @@
         state: stopped
 
     - name: Download latest Wings binary
-      get_url:
+      ansible.builtin.get_url:
         url: "{{ wings_download_url }}"
         dest: "{{ wings_binary_path }}"
         mode: "0744"
         force: true
 
     - name: Ensure correct permissions on Wings binary
-      file:
+      ansible.builtin.file:
         path: "{{ wings_binary_path }}"
         mode: "0744"
         owner: root
