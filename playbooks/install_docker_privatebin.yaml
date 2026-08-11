@@ -21,7 +21,7 @@
 
     ### GENERAL TASKS AND PREPARATION
     - name: Install required packages
-      apt:
+      ansible.builtin.apt:
         name:
           - apt-transport-https
           - ca-certificates
@@ -43,7 +43,7 @@
         state: present
 
     - name: Install Docker engine and components
-      apt:
+      ansible.builtin.apt:
         name:
           - docker-ce
           - docker-ce-cli
@@ -83,7 +83,7 @@
 
     ### --- CERTBOT ---
     - name: Install Certbot and Apache plugin
-      apt:
+      ansible.builtin.apt:
         name:
           - certbot
           - python3-certbot-apache
@@ -161,7 +161,7 @@
         seconds: 15
 
     - name: Check Privatebin container is running
-      uri:
+      ansible.builtin.uri:
         url: "https://{{ privatebin_domain }}/"
         method: GET
         return_content: false

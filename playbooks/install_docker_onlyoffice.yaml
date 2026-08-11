@@ -51,7 +51,7 @@
         state: present
 
     - name: Install Docker engine and components
-      apt:
+      ansible.builtin.apt:
         name:
           - docker-ce
           - docker-ce-cli
@@ -72,7 +72,7 @@
         - proxy_http
 
     - name: Deploy OnlyOffice Apache virtual host file
-      template:
+      ansible.builtin.template:
         src: "../files/onlyoffice_virtualhost.conf.j2"
         dest: /etc/apache2/sites-available/{{ onlyoffice_domain }}.conf
         owner: root
@@ -122,7 +122,7 @@
         seconds: 15
 
     - name: Check OnlyOffice container is running
-      uri:
+      ansible.builtin.uri:
         url: "https://{{ onlyoffice_domain }}:{{ onlyoffice_https_port }}/"
         method: GET
         return_content: false
