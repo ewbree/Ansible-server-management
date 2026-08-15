@@ -5,7 +5,7 @@
 ###
 
 - name: Update Pterodactyl Panel
-  hosts: all
+  hosts: public
   become: true
 
   vars:

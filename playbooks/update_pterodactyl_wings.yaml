@@ -5,7 +5,7 @@
 ###
 
 - name: Update Pterodactyl Wings
-  hosts: all
+  hosts: public
   become: true
 
   vars:
@@ -39,12 +39,12 @@
         owner: root
         group: root
 
-    ## Reload systemd daemon after new binary is in place
+
+    ## Restart Process
     - name: Reload systemd daemon to pick up new binary
       systemd:
         daemon_reload: true
         
-    ## Restart Process
     - name: Start Wings service
       systemd:
         name: "{{ wings_service }}"
