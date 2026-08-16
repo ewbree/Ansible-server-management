@@ -1,0 +1,110 @@
+---
+- name: Update Pterodactyl - All
+  hosts: public
+  become: true
+
+  vars:
+    panel_path: /var/www/pterodactyl
+    panel_release: https://api.github.com/repos/pterodactyl/panel/releases/latest
+
+    wings_release: https://api.github.com/repos/pterodactyl/wings/releases/latest
+
+
+  tasks:
+
+    - name: Update panel
+      block:
+
+      ### --- CHECK CURRENT ---
+      - name: Read panel version from config/app.php file
+        command: grep -E "'version'" config/app.php
+        args:
+          chdir: "{{ panel_path }}"
+        register: current_panel_version
+
+      - name: Extract current panel version number
+        set_fact:
+          current_panel_version: "{{ current_panel_version.stdout | regex_search('[0-9.]+') }}"
+
+      # - name: Show current panel version
+      #   debug:
+      #     msg: "Current panel version: {{ current_panel_version }}"
+
+
+      ### --- CHECK LATEST ---
+      - name: Fetch latest panel release info
+        uri:
+          url: "{{ panel_release }}"
+          return_content: yes
+        register: new_panel_version
+
+      - name: Extract latest panel version number
+        set_fact:
+          new_panel_version: "{{ new_panel_version.json.tag_name | regex_replace('^v', '') }}"
+
+      # - name: Show current panel version
+      #   debug:
+      #     msg: "New panel version: {{ new_panel_version }}"
+
+
+      ### --- UPDATE PANEL ---
+      - name: Determine if panel update is needed
+        set_fact:
+          panel_update_needed: "{{ new_panel_version is version(current_panel_version, '>') }}"
+
+      # - name: Show current panel version
+      #   debug:
+      #     msg: "Update needed?: {{ panel_update_needed }}"
+
+      - name: Update panel if newer version is available
+        import_playbook: ./update_pterodactyl_panel.yaml
+        when: panel_update_needed
+
+
+
+
+    - name: Update Wings
+      block:
+
+      ### --- CHECK CURRENT ---
+      - name: Check current Wings version
+        command: wings version
+        register: current_wings_version
+
+      - name: Extract version number
+        set_fact:
+          current_wings_version: "{{ current_wings_version.stdout_lines[0] | regex_search('[0-9.]+') }}"
+
+      # - name: Show current Wings version version
+      #   debug:
+      #     msg: "Current Wings version: {{ current_wings_version }}"
+
+
+      ### --- FETCH LATEST ---
+      - name: Fetch latest Wings release info
+        uri:
+          url: "{{ wings_release }}"
+          return_content: yes
+        register: new_wings_version
+
+      - name: Extract latest Wings version number
+        set_fact:
+          new_wings_version: "{{ new_wings_version.json.tag_name | regex_replace('^v', '') }}"
+
+      # - name: Show current panel version
+      #   debug:
+      #     msg: "New Wings version: {{ new_wings_version }}"
+
+
+      ### --- UPDATE WINGS ---
+      - name: Determine if Wings update is needed
+        set_fact:
+          wings_update_needed: "{{ new_wings_version is version(current_wings_version, '>') }}"
+
+      # - name: Show current panel version
+      #   debug:
+      #     msg: "Update needed?: {{ panel_update_needed }}"
+
+      - name: Update panel if newer version is available
+        import_playbook: ./update_pterodactyl_wings.yaml
+        when: wings_update_needed
