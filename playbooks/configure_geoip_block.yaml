@@ -1,0 +1,139 @@
+---
+### Useful commands for troubleshooting:
+### Listing all sets:       sudo ipset list -n
+### Listing specific set:   sudo ipset list geoip-cn
+### Flushing set:           sudo ipset flush geoip-cn
+### Destroying set:         sudo ipset destroy geoip-cn
+### Check if IP is in set:  sudo ipset test geoip-cn <IP>
+
+### NOTE: This playbook now only adds ipsets and adds rules. Removing/commenting a country will not remove ipsets and/or rules for you!
+
+- name: GeoIP filtering with ipset + iptables
+  hosts: public
+  become: true
+
+  vars:
+    # Numeric value determines the position in the table where the number represents the new rule itself. The first rule starts from 1.
+    # Change this to what fits your situation.
+    # Set the number strategically that fits traffic volumes from countries best.
+    # If most traffic comes from the listed countries, use a low(er) number and vice versa.
+    rule_position: 5
+
+    geoip_dir: /etc/iptables/geoip/
+    geoip_aggregates: https://www.ipdeny.com/ipblocks/data/aggregated/
+    
+    # Country codes based on ISO-1366 standard. For refering other countries, check: https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes
+    # Do also check: https://www.ipdeny.com/ipblocks/data/aggregated/
+    # Be careful, adding many countries may or may not bog down the server due to firewall evaluations.
+    geoip_countries:
+      - code: cn
+        setname: geoip-china
+      - code: ru
+        setname: geoip-russia
+      - code: pk
+        setname: geoip-northkorea
+
+
+  tasks:
+
+    ### --- Install required tools --- 
+    - name: Install ipset, iptables and curl
+      apt:
+        name:
+          - ipset
+          - iptables
+          - curl
+        state: present
+        update_cache: true
+
+
+    ### --- Download GeoIP aggregates and store them in dedicated directory ---    
+    - name: Ensure GeoIP directory exists
+      file:
+        path: "{{ geoip_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Download GeoIP country lists
+      get_url:
+        url: "{{ geoip_aggregates }}{{ item.code }}-aggregated.zone"
+        dest: "{{ geoip_dir }}/{{ item.code }}.zone"
+        mode: "0644"
+      loop: "{{ geoip_countries }}"
+      register: geoip_downloads
+
+
+    ### --- Create ipsets (line-by-line CIDR lists) objects for iptables to make use of ---
+    - name: Create ipsets if it is missing
+      command: "ipset create {{ item.setname }} hash:net maxelem 65536"
+      loop: "{{ geoip_countries }}"
+      # args:
+      #   warn: false
+      register: ipset_create
+      failed_when: false
+      changed_when: "'cannot be created' not in ipset_create.stderr"
+
+    - name: Flush ipset content before reloading
+      command: "ipset flush {{ item.setname }}"
+      loop: "{{ geoip_countries }}"
+      changed_when: true
+
+    - name: Load CIDRs into ipset
+      shell: |
+        while read cidr; do
+          ipset add {{ item.setname }} "$cidr" 2>/dev/null || true
+        done < "{{ geoip_dir }}/{{ item.code }}.zone"
+      loop: "{{ geoip_countries }}"
+      changed_when: true
+
+
+    ### --- Make ipsets consistent after reboot ---
+    - name: Save ipsets to .conf file
+      shell: "ipset save > {{ geoip_dir }}ipset.conf"
+
+    - name: Deploy ipset recovery binary
+      template:
+        src: "../files/ipset-restore.service.j2"
+        dest: /etc/systemd/system/ipset-restore.service
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Reload systemd daemon to pick up new binary
+      systemd:
+        daemon_reload: true
+
+    - name: Enable ipset recovery at boot
+      systemd:
+        name: ipset-restore.service
+        enabled: true
+
+
+    # --- Finally, configure iptables to make use of the ipsets by creating rules ---
+    - name: Create iptables DROP rule
+      iptables:
+        chain: INPUT
+        jump: DROP
+
+        match_set: "{{ item.setname }}"
+        match_set_flags: "src"
+
+        state: present
+        action: insert
+        rule_num: "{{ rule_position }}"
+      loop: "{{ geoip_countries }}"
+
+    # - name: Create iptables LOG rule
+    #   iptables:
+    #     chain: INPUT
+    #     jump: LOG
+    #     limit: "5/min"
+    #     log_prefix: "GeoIP BLOCK {{ item.code | upper }}: "
+
+    #     match_set: "{{ item.setname }}"
+    #     match_set_flags: "src"
+
+    #     state: present
+    #     actoin: insert
+    #     rule_num: "{{ rule_position }}"
+    #   loop: "{{ geoip_countries }}"

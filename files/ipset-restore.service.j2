@@ -1,0 +1,11 @@
+[Unit]
+Description=Restore ipset rules
+After=network-pre.target
+Before=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/ipset restore -file {{ geoip_dir }}ipset.conf
+
+[Install]
+WantedBy=multi-user.target
