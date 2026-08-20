@@ -100,3 +100,18 @@
       command: php artisan up
       args:
         chdir: "{{ panel_path }}"
+
+    ### Wait for PHP-FPM to be ready
+    - name: Wait for PHP-FPM master process to start
+      wait_for_process:
+        path: "php"
+        state: started
+        timeout: 60
+
+    ### Verify queue worker processes are running
+    - name: Verify queue workers are active
+      wait_for_process:
+        path: "php"
+        state: started
+        count: 1
+        timeout: 30
