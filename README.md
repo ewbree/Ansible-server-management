@@ -4,8 +4,7 @@ An ansible repository with some of my scripts for various uses for myself but ot
 
 ## Applications, services, tools used on endpoints:
 The tools I deploy on the endpoints might not be preferred by yourself. But to make it clear, here is what I use. You may need to alter the playbooks for your own use.
-- iptables
--- GeoIP blocking using ipset
+- iptables and ipset geoIP blocking
 - Apache2
 - Docker
 - [Pterodactyl (For updating only as of now.)](https://github.com/pterodactyl/panel)
