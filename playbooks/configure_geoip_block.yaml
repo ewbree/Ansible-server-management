@@ -12,6 +12,8 @@
   become: true
 
   vars:
+    traffic_logging: false  # Set to true if you also want to log traffic hitting the DROP rules.
+    
     # Numeric value determines the position in the table where the number represents the new rule itself. The first rule starts from 1.
     # Change this to what fits your situation.
     # Set the number strategically that fits traffic volumes from countries best.
@@ -104,20 +106,21 @@
         rule_num: "{{ rule_position }}"
       loop: "{{ geoip_countries }}"
 
-    # - name: Create iptables LOG rule
-    #   ansible.builtin.iptables:
-    #     chain: INPUT
-    #     jump: LOG
-    #     limit: "5/min"
-    #     log_prefix: "GeoIP BLOCK {{ item.code | upper }}: "
+    - name: Create iptables LOG rule
+      when: traffic_logging
+      ansible.builtin.iptables:
+        chain: INPUT
+        jump: LOG
+        limit: "5/min"
+        log_prefix: "GeoIP BLOCK {{ item.code | upper }}: "
 
-    #     match_set: "geoip-{{ item }}"
-    #     match_set_flags: "src"
+        match_set: "geoip-{{ item }}"
+        match_set_flags: "src"
 
-    #     state: present
-    #     action: insert
-    #     rule_num: "{{ rule_position }}"
-    #   loop: "{{ geoip_countries }}"
+        state: present
+        action: insert
+        rule_num: "{{ rule_position }}"
+      loop: "{{ geoip_countries }}"
 
 
 
@@ -150,18 +153,18 @@
         state: absent
       loop: "{{ orphan_country_codes }}"
 
-    # - name: Remove orphaned LOG rules
-    #   iptables:
-    #     chain: INPUT
-    #     jump: LOG
-    #     limit: "5/min"
-    #     log_prefix: "GeoIP BLOCK {{ item.code | upper }}: "
+    - name: Remove orphaned LOG rules
+      iptables:
+        chain: INPUT
+        jump: LOG
+        limit: "5/min"
+        log_prefix: "GeoIP BLOCK {{ item.code | upper }}: "
 
-    #     match_set: "geoip-{{ item }}"
-    #     match_set_flags: "src"
+        match_set: "geoip-{{ item }}"
+        match_set_flags: "src"
 
-    #     state: absent
-    #   loop: "{{ orphan_country_codes }}"
+        state: absent
+      loop: "{{ orphan_country_codes }}"
 
 
     ### --- Remove orphaned country codes ipsets and zones ---
