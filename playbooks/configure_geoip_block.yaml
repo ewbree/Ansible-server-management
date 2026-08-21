@@ -6,7 +6,6 @@
 ### Destroying set:         sudo ipset destroy geoip
 ### Check if IP is in set:  sudo ipset test geoip <IP>
 
-### NOTE: This playbook now only adds ipsets and adds rules. Removing/commenting a country will not remove ipsets and/or rules for you!
 
 - name: GeoIP filtering with ipset + iptables
   hosts: public
@@ -34,8 +33,8 @@
       ### Asia/Middle-East
       - cn  # China
       - kp  # North Korea
-      - pk  # Pakistan
-      - sy  # Syria
+      # - pk  # Pakistan
+      # - sy  # Syria
 
 
   tasks:
@@ -91,9 +90,6 @@
 
 
 
-
-
-
     ### --- Finally, configure iptables to make use of the ipsets by creating rules ---
     - name: Create iptables DROP rule
       iptables:
@@ -119,15 +115,70 @@
     #     match_set_flags: "src"
 
     #     state: present
-    #     actoin: insert
+    #     action: insert
     #     rule_num: "{{ rule_position }}"
     #   loop: "{{ geoip_countries }}"
 
 
 
 
+    ### --- Gather orphaned country codes ---
+    - name: Gather all present .zone files in geoip directory
+      ansible.builtin.find:
+        paths: "{{ geoip_dir }}"
+        patterns: "*.zone"
+      register: zone_files
+
+    - name: Extract country codes from present .zone files
+      set_fact:
+        present_country_codes: "{{ zone_files.files | map(attribute='path') | map('basename') | map('regex_replace', '\\.zone$', '') | list }}"
+
+    - name: Gather orphan country codes into list
+      set_fact:
+        orphan_country_codes: "{{ present_country_codes | difference(geoip_countries) }}"
 
 
+    ### --- Remove iptables rules based on orphaned country codes ---
+    - name: Remove orphaned DROP rules
+      iptables:
+        chain: INPUT
+        jump: DROP
+
+        match_set: "geoip-{{ item }}"
+        match_set_flags: "src"
+
+        state: absent
+        # action: insert
+        # rule_num: "{{ rule_position }}"
+      loop: "{{ orphan_country_codes }}"
+
+    # - name: Remove orphaned LOG rules
+    #   iptables:
+    #     chain: INPUT
+    #     jump: LOG
+    #     limit: "5/min"
+    #     log_prefix: "GeoIP BLOCK {{ item.code | upper }}: "
+
+    #     match_set: "geoip-{{ item }}"
+    #     match_set_flags: "src"
+
+    #     state: absent
+    #     # action: insert
+    #     # rule_num: "{{ rule_position }}"
+    #   loop: "{{ orphan_country_codes }}"
+
+
+    ### --- Remove orphaned country codes ipsets and zones ---
+    - name: Destroy orphan ipsets
+      command: "ipset destroy geoip-{{ item }}"
+      loop: "{{ orphan_country_codes }}"
+      ignore_errors: true
+
+    - name: Delete orphan .zone files
+      file:
+        path: "{{ geoip_dir }}/{{ item }}.zone"
+        state: absent
+      loop: "{{ orphan_country_codes }}"
 
 
 
