@@ -41,7 +41,7 @@
 
     ### --- Install required tools --- 
     - name: Install ipset, iptables and curl
-      apt:
+      ansible.builtin.apt:
         name:
           - ipset
           - iptables
@@ -52,13 +52,13 @@
 
     ### --- Download GeoIP aggregates and store them in dedicated directory ---    
     - name: Ensure GeoIP directory exists
-      file:
+      ansible.builtin.file:
         path: "{{ geoip_dir }}"
         state: directory
         mode: "0755"
 
     - name: Download GeoIP country lists
-      get_url:
+      ansible.builtin.get_url:
         url: "{{ geoip_aggregates }}{{ item }}-aggregated.zone"
         dest: "{{ geoip_dir }}/{{ item }}.zone"
         mode: "0644"
@@ -68,19 +68,19 @@
 
     ### --- Create ipsets (line-by-line CIDR lists) objects for iptables to make use of ---
     - name: Create ipsets if it is missing
-      command: "ipset create geoip-{{ item }} hash:net maxelem 65536"
+      ansible.builtin.command: "ipset create geoip-{{ item }} hash:net maxelem 65536"
       loop: "{{ geoip_countries }}"
       register: ipset_create
       failed_when: false
       changed_when: "'cannot be created' not in ipset_create.stderr"
 
     - name: Flush ipset content before reloading
-      command: "ipset flush geoip-{{ item }}"
+      ansible.builtin.command: "ipset flush geoip-{{ item }}"
       loop: "{{ geoip_countries }}"
       changed_when: true
 
     - name: Load CIDRs into ipset
-      shell: |
+      ansible.builtin.shell: |
         while read cidr; do
           ipset add geoip-{{ item }} "$cidr" 2>/dev/null || true
         done < "{{ geoip_dir }}/{{ item }}.zone"
@@ -92,7 +92,7 @@
 
     ### --- Finally, configure iptables to make use of the ipsets by creating rules ---
     - name: Create iptables DROP rule
-      iptables:
+      ansible.builtin.iptables:
         chain: INPUT
         jump: DROP
 
@@ -105,7 +105,7 @@
       loop: "{{ geoip_countries }}"
 
     # - name: Create iptables LOG rule
-    #   iptables:
+    #   ansible.builtin.iptables:
     #     chain: INPUT
     #     jump: LOG
     #     limit: "5/min"
@@ -130,17 +130,17 @@
       register: zone_files
 
     - name: Extract country codes from present .zone files
-      set_fact:
+      ansible.builtin.set_fact:
         present_country_codes: "{{ zone_files.files | map(attribute='path') | map('basename') | map('regex_replace', '\\.zone$', '') | list }}"
 
     - name: Gather orphan country codes into list
-      set_fact:
+      ansible.builtin.set_fact:
         orphan_country_codes: "{{ present_country_codes | difference(geoip_countries) }}"
 
 
     ### --- Remove iptables rules based on orphaned country codes ---
     - name: Remove orphaned DROP rules
-      iptables:
+      ansible.builtin.iptables:
         chain: INPUT
         jump: DROP
 
@@ -148,8 +148,6 @@
         match_set_flags: "src"
 
         state: absent
-        # action: insert
-        # rule_num: "{{ rule_position }}"
       loop: "{{ orphan_country_codes }}"
 
     # - name: Remove orphaned LOG rules
@@ -163,14 +161,12 @@
     #     match_set_flags: "src"
 
     #     state: absent
-    #     # action: insert
-    #     # rule_num: "{{ rule_position }}"
     #   loop: "{{ orphan_country_codes }}"
 
 
     ### --- Remove orphaned country codes ipsets and zones ---
     - name: Destroy orphan ipsets
-      command: "ipset destroy geoip-{{ item }}"
+      ansible.builtin.command: "ipset destroy geoip-{{ item }}"
       loop: "{{ orphan_country_codes }}"
       ignore_errors: true
 
@@ -185,10 +181,10 @@
 
     ### --- Make ipsets consistent after reboot ---
     - name: Save ipsets to .conf file
-      shell: "ipset save > {{ geoip_dir }}ipset.conf"
+      ansible.builtin.shell: "ipset save > {{ geoip_dir }}ipset.conf"
 
     - name: Deploy ipset recovery binary
-      template:
+      ansible.builtin.template:
         src: "../files/ipset-restore.service.j2"
         dest: /etc/systemd/system/ipset-restore.service
         owner: root
@@ -196,10 +192,10 @@
         mode: '0644'
 
     - name: Reload systemd daemon to pick up new binary
-      systemd:
+      ansible.builtin.systemd:
         daemon_reload: true
 
     - name: Enable ipset recovery at boot
-      systemd:
+      ansible.builtin.systemd:
         name: ipset-restore.service
         enabled: true
