@@ -13,6 +13,7 @@
 
   vars:
     traffic_logging: false  # Set to true if you also want to log traffic hitting the DROP rules.
+    rule_action: DROP  # Use DROP to block all countries, use ALLOW to allow traffic from countries.
     
     # Numeric value determines the position in the table where the number represents the new rule itself. The first rule starts from 1.
     # Change this to what fits your situation.
@@ -34,9 +35,13 @@
       
       ### Asia/Middle-East
       - cn  # China
+      - hk  # Hong Kong
+      - sg  # Singapore
       - kp  # North Korea
-      # - pk  # Pakistan
-      # - sy  # Syria
+      - vn  # Vietnam
+
+      ### Americas
+      - ar  # Argentinia
 
 
   tasks:
@@ -96,7 +101,7 @@
     - name: Create iptables DROP rule
       ansible.builtin.iptables:
         chain: INPUT
-        jump: DROP
+        jump: "{{ rule_action }}"
 
         match_set: "geoip-{{ item }}"
         match_set_flags: "src"
@@ -145,7 +150,7 @@
     - name: Remove orphaned DROP rules
       ansible.builtin.iptables:
         chain: INPUT
-        jump: DROP
+        jump: "{{ rule_action }}"
 
         match_set: "geoip-{{ item }}"
         match_set_flags: "src"
