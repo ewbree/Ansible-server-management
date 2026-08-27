@@ -50,3 +50,30 @@
         name: "{{ wings_service }}"
         state: started
         enabled: true
+
+    ### Wait for Wings to be ready (systemd level)
+    - name: Wait for Wings service to become active
+      wait_for:
+        timeout: 60
+        state: started
+
+    ### Verify Wings health endpoint is responding
+    - name: Verify Wings health endpoint
+      uri:
+        url: "http://localhost:8080/health"
+        method: GET
+        status_code: [200, 403]
+        return_content: true
+      register: wings_health
+
+    ### Fail if health check fails after retries (using loop with delay)
+    - name: Retry Wings health check on failure
+      block:
+        - name: Wait and retry health check
+          wait_for:
+            port: 8080
+            timeout: 30
+      rescue:
+        - name: Report Wings health check failure
+          fail:
+            msg: "Wings service failed to start properly. Health endpoint did not respond within the timeout period."
