@@ -1,0 +1,159 @@
+---
+- name: Install Owncast using Docker
+  hosts: public
+  become: true
+
+  vars:
+    owncast_path: "/opt/owncast"
+    owncast_owner: root
+    owncast_group: root
+
+    owncast_image: "owncast/owncast"
+    owncast_image_version: "latest"
+    owncast_container_name: "owncast"
+
+    # owncast_target: <Check secrets.yaml>
+    owncast_selected_instance: "{{ owncast_instances | selectattr('owncast_name', 'equalto', owncast_target) | first }}"
+
+  vars_files:
+    - ../secrets.yaml  # Load the other more private information.
+
+
+  tasks:
+
+    ### GENERAL TASKS AND PREPARATION
+    - name: Install required packages
+      ansible.builtin.apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+          - apache2
+        state: present
+        update_cache: true
+
+    - name: Add Docker GPG key
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /usr/share/keyrings/docker.asc
+        mode: '0644'
+
+    - name: Add Docker repository
+      ansible.builtin.apt_repository:
+        repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+
+    - name: Install Docker engine and components
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        update_cache: true
+
+
+    ### --- APACHE2 ---
+    - name: Enable required Apache2 modules
+      community.general.apache2_module:
+        state: present
+        name: "{{ item }}"
+      loop:
+        - proxy
+        - proxy_http
+
+    - name: Deploy Owncast Apache virtual host file
+      template:
+        src: "../files/owncast_virtualhost.conf.j2"
+        dest: /etc/apache2/sites-available/{{ owncast_selected_instance.owncast_domain }}.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Enable virtual host
+      ansible.builtin.command: a2ensite {{ owncast_selected_instance.owncast_domain }}.conf
+      become: true
+
+    - name: Reload Apache2
+      ansible.builtin.systemd_service:
+        name: apache2.service
+        state: reloaded
+
+
+    ### --- CERTBOT ---
+    - name: Install Certbot and Apache plugin
+      ansible.builtin.apt:
+        name:
+          - certbot
+          - python3-certbot-apache
+        state: present
+        update_cache: true
+
+    - name: Obtain certificate using Certbot
+      ansible.builtin.command: >
+        certbot --apache -n --agree-tos --redirect
+        -m {{ lets_encrypt_email }}
+        -d {{ owncast_selected_instance.owncast_domain }}
+      register: certbot_result
+      changed_when: "'Congratulations' in certbot_result.stdout"
+
+    - name: Reload Apache after Certbot
+      ansible.builtin.systemd_service:
+        name: apache2.service
+        state: reloaded
+
+
+    ### --- CONTAINER CONFIG SETUP ---
+    - name: Ensure Owncast directories exists
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ owncast_owner }}"
+        group: "{{ owncast_group }}"
+        mode: "0755"
+        recurse: true
+      loop:
+        - "{{ owncast_path }}-{{ owncast_selected_instance.owncast_name }}/config"
+        - "{{ owncast_path }}-{{ owncast_selected_instance.owncast_name }}/data"
+
+
+    ### --- DOCKER ---
+    - name: Pull Owncast Docker image
+      community.docker.docker_image:
+        name: "{{ owncast_image }}:{{ owncast_image_version }}"
+        source: pull
+
+    - name: Run Owncast container
+      community.docker.docker_container:
+        name: "{{ owncast_container_name }}-{{ owncast_selected_instance.owncast_name }}"
+        image: "{{ owncast_image }}:{{ owncast_image_version }}"
+        restart_policy: always
+        state: started
+        recreate: true
+        ports:
+          - "127.0.0.1:{{ owncast_selected_instance.owncast_https_proxy_port }}:8080"  # Will need an HTTPS proxy to be used this way as it only runs in HTTP by itself. Change left port to anything you want in secrets file.
+          - "0.0.0.0:{{ owncast_selected_instance.owncast_rtmp_port }}:1935"
+        volumes:  # Volumes are used for easier to modify configuration as well as persistent stored data upon container renewal.
+          - "{{ owncast_path }}-{{ owncast_selected_instance.owncast_name }}/config:/app/config"
+          - "{{ owncast_path }}-{{ owncast_selected_instance.owncast_name }}/data:/app/data"
+
+
+    ### --- VERIFY ---
+    - name: Wait for Owncast container to start
+      pause:
+        seconds: 15
+
+    - name: Check Owncast container is running
+      ansible.builtin.uri:
+        url: "https://{{ owncast_selected_instance.owncast_domain }}/"
+        method: GET
+        return_content: false
+        status_code: 200
+      register: owncast_health
+      retries: 3
+      delay: 3
+      until: owncast_health.status == 200
+      delegate_to: localhost

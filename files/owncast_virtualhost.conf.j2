@@ -1,0 +1,19 @@
+<VirtualHost *:80>
+    ServerName {{ owncast_selected_instance.owncast_domain }}
+    Redirect permanent / https://{{ owncast_selected_instance.owncast_domain }}/
+</VirtualHost>
+
+
+<VirtualHost *:443>
+    ServerName {{ owncast_selected_instance.owncast_domain }}
+
+    ProxyRequests       Off
+    ProxyPreserveHost   On
+    AllowEncodedSlashes NoDecode
+
+    ProxyPass        / http://127.0.0.1:{{ owncast_selected_instance.owncast_https_proxy_port }}/ upgrade=websocket
+    ProxyPassReverse / http://127.0.0.1:{{ owncast_selected_instance.owncast_https_proxy_port }}/
+
+    RequestHeader    set X-Forwarded-Proto "https"
+    RequestHeader    set X-Forwarded-Port "443"
+</VirtualHost>
