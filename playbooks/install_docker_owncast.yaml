@@ -125,6 +125,7 @@
       community.docker.docker_image:
         name: "{{ owncast_image }}:{{ owncast_image_version }}"
         source: pull
+        force_source: true
 
     - name: Run Owncast container
       community.docker.docker_container:

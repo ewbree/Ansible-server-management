@@ -99,6 +99,7 @@
       community.docker.docker_image:
         name: "{{ onlyoffice_image }}:{{ onlyoffice_version }}"
         source: pull
+        force_source: true
 
     - name: Run OnlyOffice container (HTTPS)
       community.docker.docker_container:
