@@ -13,13 +13,14 @@
 
   vars:
     traffic_logging: false  # Set to true if you also want to log traffic hitting the DROP rules.
+    rule_chain: GEOIPS  # Can be used to put rules in a different chain. You'll have to make the chain and forward rule yourself, still.
     rule_action: DROP  # Use DROP to block all countries, use ALLOW to allow traffic from countries.
     
     # Numeric value determines the position in the table where the number represents the new rule itself. The first rule starts from 1.
     # Change this to what fits your situation.
     # Set the number strategically that fits traffic volumes from countries best.
     # If most traffic comes from the listed countries, use a low(er) number and vice versa.
-    rule_position: 4
+    rule_position: 1
 
     geoip_dir: /etc/iptables/geoip/
     geoip_aggregates: https://www.ipdeny.com/ipblocks/data/aggregated/
@@ -100,7 +101,7 @@
     ### --- Finally, configure iptables to make use of the ipsets by creating rules ---
     - name: Create iptables DROP rule
       ansible.builtin.iptables:
-        chain: INPUT
+        chain: "{{ rule_chain }}"
         jump: "{{ rule_action }}"
 
         match_set: "geoip-{{ item }}"
@@ -114,7 +115,7 @@
     - name: Create iptables LOG rule
       when: traffic_logging
       ansible.builtin.iptables:
-        chain: INPUT
+        chain: "{{ rule_chain }}"
         jump: LOG
         limit: "5/min"
         log_prefix: "GeoIP BLOCK {{ item.code | upper }}: "
@@ -149,7 +150,7 @@
     ### --- Remove iptables rules based on orphaned country codes ---
     - name: Remove orphaned DROP rules
       ansible.builtin.iptables:
-        chain: INPUT
+        chain: "{{ rule_chain }}"
         jump: "{{ rule_action }}"
 
         match_set: "geoip-{{ item }}"
@@ -160,7 +161,7 @@
 
     - name: Remove orphaned LOG rules
       iptables:
-        chain: INPUT
+        chain: "{{ rule_chain }}"
         jump: LOG
         limit: "5/min"
         log_prefix: "GeoIP BLOCK {{ item.code | upper }}: "
