@@ -136,7 +136,7 @@
         recreate: true
         ports:
           - "127.0.0.1:{{ owncast_selected_instance.owncast_https_proxy_port }}:8080"  # Will need an HTTPS proxy to be used this way as it only runs in HTTP by itself. Change left port to anything you want in secrets file.
-          - "0.0.0.0:{{ owncast_selected_instance.owncast_rtmp_port }}:1935"
+          - "{{ server_ip }}:{{ owncast_selected_instance.owncast_rtmp_port }}:1935"
         volumes:  # Volumes are used for easier to modify configuration as well as persistent stored data upon container renewal.
           - "{{ owncast_path }}-{{ owncast_selected_instance.owncast_name }}/config:/app/config"
           - "{{ owncast_path }}-{{ owncast_selected_instance.owncast_name }}/data:/app/data"
