@@ -1,0 +1,79 @@
+---
+# Ansible Playbook: Install and Configure Tailscale on Debian-based Raspberry Pis
+# Uses the official install script for reliability across all supported distributions.
+
+- name: Install Tailscale on Debian-based systems
+  hosts: all
+  become: true
+  gather_facts: false
+
+  vars:
+    # Replace with your actual Tailscale auth key (from tailscale.com > Keys)
+    # Auth keys allow registering nodes without interactive login.
+    tailscale_auth_key: "{{ lookup('env', 'TAILSCALE_AUTH_KEY') | default('YOUR_TAILSCALE_AUTH_KEY_HERE', true) }}"
+
+  tasks:
+    - name: Install required dependencies
+      apt:
+        name:
+          - curl
+          - gnupg
+          - ca-certificates
+        state: present
+
+    - name: Load tun kernel module if not loaded
+      community.general.modprobe:
+        name: tun
+        state: present
+
+    - name: Install Tailscale using official install script
+      # This is the same script recommended by Tailscale for all mainstream distributions.
+      # It automatically detects your Debian version and configures everything correctly.
+      shell: curl -fsSL https://tailscale.com/install.sh | sh
+      register: tailscale_install_result
+      changed_when: "'already installed' not in tailscale_install_result.stdout"
+
+    - name: Ensure tun module is loaded on boot (Debian-specific)
+      lineinfile:
+        path: /etc/modules
+        line: "tun"
+        create: true
+        insertafter: EOF
+
+    - name: Ensure tailscaled service is enabled and started
+      systemd:
+        name: tailscaled
+        state: started
+        enabled: true
+
+    - name: Register device with Tailscale using auth key
+      # Auth keys allow registering nodes without interactive login.
+      # See: https://tailscale.com/kb/1085/auth-keys
+      command: sudo tailscale up --auth-key={{ tailscale_auth_key }}
+      register: tailscale_up_result
+      changed_when: "'already logged in' not in tailscale_up_result.stdout and 'logged in' not in tailscale_up_result.stdout"
+
+    - name: Verify Tailscale is running
+      command: tailscale status --verbose
+      register: tailscale_status
+      changed_when: false
+      failed_when: "'not logged in' in tailscale_status.stdout"
+
+    - name: Display login instructions for SSH access via Tailscale
+      # After this playbook runs, you can SSH into your Raspberry Pi using its Tailscale IP.
+      # Example: ssh pi@<tailscale-ip>
+      debug:
+        msg: |
+          === Tailscale Setup Complete ===
+
+          Your device is now registered with Tailscale.
+
+          To log in via SSH, use the Tailscale IP address instead of your local IP:
+
+            ssh pi@<Tailscale_IP>
+
+          Find your Tailscale IPs by running on any Tailscale-connected machine:
+            tailscale ip
+
+          For more information:
+            - https://tailscale.com/kb/1019/cli
