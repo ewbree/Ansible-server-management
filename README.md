@@ -10,6 +10,7 @@ The tools I deploy on the endpoints might not be preferred by yourself. But to m
 - [Pterodactyl (For updating only as of now.)](https://github.com/pterodactyl/panel)
 - [OnlyOffice Document Server (Community Edition)](https://github.com/ONLYOFFICE/CommunityServer)
 - [Privatebin](https://github.com/PrivateBin/PrivateBin)
+- [Owncast](https://github.com/owncast/owncast)
 
 
 
@@ -40,6 +41,7 @@ Then simply put the hostname and keyfile location in the 'hosts.yaml' file. You 
 ### Running an Ansible playbook:
 From then, you can run the playbooks by using the command:
 ```
+. .venv/bin/activate  (if not done so already.)
 ansible-playbook -i hosts.yaml ./playbooks/<FILE>
 ```
 
