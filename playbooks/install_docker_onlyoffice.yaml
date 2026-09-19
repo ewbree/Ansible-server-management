@@ -8,6 +8,7 @@
   become: true
 
   vars:
+    # Reference: https://hub.docker.com/r/onlyoffice/documentserver
     onlyoffice_image: "onlyoffice/documentserver"
     onlyoffice_version: "latest"
 
@@ -24,7 +25,7 @@
     # DONE    Maybe once it runs do some localhost check to verify an connection.
     #         Add some option to omit running the container with a proxy if port 443 and 80 are used directly.
     #         Make a new random JWT and return it once
-    #         Make it so old container is disabled and perhaps removed if needed.
+    # DONE    Make it so old container is disabled and perhaps removed if needed.
 
 
     ### GENERAL TASKS AND PREPARATION
@@ -89,11 +90,16 @@
         state: reloaded
 
 
-    ### DOCKER RELATED
-    # - name: Remove old OnlyOffice container if it exists
-    #   community.docker.docker_container:
-    #     name: "{{ onlyoffice_container_name }}"
-    #     state: absent
+    ## DOCKER RELATED
+    - name: Pull OnlyOffice Docker image
+      community.docker.docker_image:
+        name: "{{ onlyoffice_image }}:{{ onlyoffice_version }}"
+        state: absent
+
+    - name: Remove old OnlyOffice container if it exists
+      community.docker.docker_container:
+        name: "{{ onlyoffice_container_name }}"
+        state: absent
 
     - name: Pull OnlyOffice Docker image
       community.docker.docker_image:
