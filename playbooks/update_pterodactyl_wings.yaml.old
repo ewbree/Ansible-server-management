@@ -4,20 +4,20 @@
 ### https://pterodactyl.io/wings/1.0/upgrading.html
 ###
 
-- name: Update Pterodactyl Wings
-  hosts: public
-  become: true
+# - name: Update Pterodactyl Wings
+#   hosts: public
+#   become: true
 
-  vars:
-    wings_arch: "{{ 'amd64' if ansible_facts.machine == 'x86_64' else 'arm64' }}"
-    wings_download_url: "https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_{{ wings_arch }}"
+#   vars:
+#     wings_arch: "{{ 'amd64' if ansible_facts.machine == 'x86_64' else 'arm64' }}"
+#     wings_download_url: "https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_{{ wings_arch }}"
 
-    wings_binary_path: /usr/local/bin/wings
+#     wings_binary_path: /usr/local/bin/wings
 
-    wings_service: wings
+#     wings_service: wings
 
 
-  tasks:
+  # tasks:
 
     ## Download Updated Binary
     - name: Stop Wings service

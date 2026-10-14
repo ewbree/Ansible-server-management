@@ -4,21 +4,21 @@
 ### https://pterodactyl.io/panel/1.0/updating.html
 ###
 
-- name: Update Pterodactyl Panel
-  hosts: public
-  become: true
+# - name: Update Pterodactyl Panel
+#   hosts: public
+#   become: true
 
-  vars:
-    release_url: "https://github.com/pterodactyl/panel/releases/latest/download/panel.tar.gz"  # Usually stick to latest
+  # vars:
+  #   release_url: "https://github.com/pterodactyl/panel/releases/latest/download/panel.tar.gz"  # Usually stick to latest
 
-    panel_path: /var/www/pterodactyl
+  #   panel_path: /var/www/pterodactyl
 
-    # 'www-data' if using NGINX or Apache (not on CentOS)  //  'nginx' if using NGINX on CentOS  //  'apache' if using Apache on CentOS
-    web_user: www-data
-    web_group: www-data
+  #   # 'www-data' if using NGINX or Apache (not on CentOS)  //  'nginx' if using NGINX on CentOS  //  'apache' if using Apache on CentOS
+  #   web_user: www-data
+  #   web_group: www-data
 
 
-  tasks:
+  # tasks:
 
     ### Enter Maintenance Mode
     - name: Enter maintenance mode
