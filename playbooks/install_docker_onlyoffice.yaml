@@ -10,7 +10,7 @@
   vars:
     # Reference: https://hub.docker.com/r/onlyoffice/documentserver
     onlyoffice_image: "onlyoffice/documentserver"
-    onlyoffice_version: "latest"
+    onlyoffice_version: "9.4.0.1"  # Latest not working
 
     onlyoffice_container_name: "onlyoffice-documentserver"
 
@@ -90,16 +90,19 @@
         state: reloaded
 
 
+
+
     ## DOCKER RELATED
-    - name: Pull OnlyOffice Docker image
+    - name: Remove OnlyOffice container if it exists
+      community.docker.docker_container:
+        name: "{{ onlyoffice_container_name }}"
+        state: absent
+    
+    - name: Remove OnlyOffice Docker image if it exists
       community.docker.docker_image:
         name: "{{ onlyoffice_image }}:{{ onlyoffice_version }}"
         state: absent
 
-    - name: Remove old OnlyOffice container if it exists
-      community.docker.docker_container:
-        name: "{{ onlyoffice_container_name }}"
-        state: absent
 
     - name: Pull OnlyOffice Docker image
       community.docker.docker_image:
@@ -121,6 +124,8 @@
           LETS_ENCRYPT_DOMAIN: "{{ onlyoffice_domain }}"
           LETS_ENCRYPT_MAIL: "{{ lets_encrypt_email }}"
           JWT_SECRET: "{{ onlyoffice_jwt_secret }}"
+
+
 
 
     ### VERIFY
