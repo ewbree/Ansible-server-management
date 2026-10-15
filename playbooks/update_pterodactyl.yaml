@@ -5,225 +5,25 @@
 
   vars:
     # Main
-    panel_path: /var/www/pterodactyl
+    # panel_path: /var/www/pterodactyl
     panel_release: https://api.github.com/repos/pterodactyl/panel/releases/latest
-
     wings_release: https://api.github.com/repos/pterodactyl/wings/releases/latest
 
 
     # Panel
     release_url: "https://github.com/pterodactyl/panel/releases/latest/download/panel.tar.gz"  # Usually stick to latest
-
     panel_path: /var/www/pterodactyl
-
-    # 'www-data' if using NGINX or Apache (not on CentOS)  //  'nginx' if using NGINX on CentOS  //  'apache' if using Apache on CentOS
-    web_user: www-data
-    web_group: www-data
+    web_user: www-data   # 'www-data' if using NGINX or Apache (not on CentOS)  //  'nginx' if using NGINX on CentOS  //  'apache' if using Apache on CentOS
+    web_group: www-data  # 'www-data' if using NGINX or Apache (not on CentOS)  //  'nginx' if using NGINX on CentOS  //  'apache' if using Apache on CentOS
 
 
     # Wings
     wings_arch: "{{ 'amd64' if ansible_facts.machine == 'x86_64' else 'arm64' }}"
     wings_download_url: "https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_{{ wings_arch }}"
-
     wings_binary_path: /usr/local/bin/wings
-
     wings_service: wings
 
 
-
-
   tasks:
-
-    - name: Update panel
-      block:
-
-      ### --- CHECK CURRENT ---
-      - name: Read panel version from config/app.php file
-        command: grep -E "'version'" config/app.php
-        args:
-          chdir: "{{ panel_path }}"
-        register: current_panel_version
-
-      - name: Extract current panel version number
-        set_fact:
-          current_panel_version: "{{ current_panel_version.stdout | regex_search('[0-9.]+') }}"
-
-
-      ### --- CHECK LATEST ---
-      - name: Fetch latest panel release info
-        uri:
-          url: "{{ panel_release }}"
-          return_content: yes
-        register: new_panel_version
-
-      - name: Extract latest panel version number
-        set_fact:
-          new_panel_version: "{{ new_panel_version.json.tag_name | regex_replace('^v', '') }}"
-
-
-      ### --- UPDATE PANEL ---
-      - name: Determine if panel update is needed
-        set_fact:
-          panel_update_needed: "{{ new_panel_version is version(current_panel_version, '>') }}"
-
-
-
-
-      - name: Update panel if newer version is available
-        when: panel_update_needed
-        block:
-        ### Enter Maintenance Mode
-        - name: Enter maintenance mode
-          command: php artisan down
-          args:
-            chdir: "{{ panel_path }}"
-
-
-        ### Download the Update
-        - name: Download latest panel release
-          ansible.builtin.get_url:
-            url: "{{ release_url }}"
-            dest: "/tmp/panel.tar.gz"
-            mode: "0644"
-
-        - name: Extract panel release
-          ansible.builtin.unarchive:
-            src: "/tmp/panel.tar.gz"
-            dest: "{{ panel_path }}"
-            remote_src: true  # Unpacks archive as it already exists on the target with prior task.
-
-        - name: Fix permissions for storage and cache
-          ansible.builtin.file:
-            path: "{{ item }}"
-            mode: "0755"
-            recurse: true
-          loop:
-            - "{{ panel_path }}/storage"
-            - "{{ panel_path }}/bootstrap/cache"
-
-        - name: Delete the downloaded .tar.gz file
-          ansible.builtin.file:
-            path: "/tmp/panel.tar.gz"
-            state: absent
-
-
-        ### Update Dependencies
-        - name: Install composer dependencies
-          command: composer install --no-dev --optimize-autoloader
-          args:
-            chdir: "{{ panel_path }}"
-
-
-        ### Clear Compiled Template Cache
-        - name: Clear compiled template cache
-          command: "{{ item }}"
-          args:
-            chdir: "{{ panel_path }}"
-          loop:
-            - php artisan view:clear
-            - php artisan config:clear
-
-
-        ### Database Updates
-        - name: Run database migrations & seed
-          command: php artisan migrate --seed --force
-          args:
-            chdir: "{{ panel_path }}"
-
-
-        ### Set Permissions
-        - name: Set correct ownership for panel files
-          ansible.builtin.file:
-            path: "{{ panel_path }}"
-            owner: "{{ web_user }}"
-            group: "{{ web_group }}"
-            recurse: true
-
-
-        ### Restarting Queue Workers
-        - name: Restart queue workers
-          command: php artisan queue:restart
-          args:
-            chdir: "{{ panel_path }}"
-
-
-        ### Exit Maintenance Mode
-        - name: Exit maintenance mode
-          command: php artisan up
-          args:
-            chdir: "{{ panel_path }}"
-
-
-
-
-
-
-
-
-    - name: Update Wings
-      block:
-
-      ### --- CHECK CURRENT ---
-      - name: Check current Wings version
-        command: wings version
-        register: current_wings_version
-
-      - name: Extract version number
-        set_fact:
-          current_wings_version: "{{ current_wings_version.stdout_lines[0] | regex_search('[0-9.]+') }}"
-
-
-      ### --- FETCH LATEST ---
-      - name: Fetch latest Wings release info
-        uri:
-          url: "{{ wings_release }}"
-          return_content: yes
-        register: new_wings_version
-
-      - name: Extract latest Wings version number
-        set_fact:
-          new_wings_version: "{{ new_wings_version.json.tag_name | regex_replace('^v', '') }}"
-
-
-      ### --- UPDATE WINGS ---
-      - name: Determine if Wings update is needed
-        set_fact:
-          wings_update_needed: "{{ new_wings_version is version(current_wings_version, '>') }}"
-
-
-
-
-      - name: Update Wings if newer version is available
-        when: wings_update_needed
-        block:
-        ## Download Updated Binary
-        - name: Stop Wings service
-          systemd:
-            name: "{{ wings_service }}"
-            state: stopped
-
-        - name: Download latest Wings binary
-          ansible.builtin.get_url:
-            url: "{{ wings_download_url }}"
-            dest: "{{ wings_binary_path }}"
-            mode: "0744"
-            force: true
-
-        - name: Ensure correct permissions on Wings binary
-          ansible.builtin.file:
-            path: "{{ wings_binary_path }}"
-            mode: "0744"
-            owner: root
-            group: root
-
-
-        ## Restart Process
-        - name: Reload systemd daemon to pick up new binary
-          systemd:
-            daemon_reload: true
-            
-        - name: Start Wings service
-          systemd:
-            name: "{{ wings_service }}"
-            state: started
-            enabled: true
+    - import_tasks: update_pterodactyl_panel.yaml
+    - import_tasks: update_pterodactyl_wings.yaml
