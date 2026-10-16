@@ -15,7 +15,9 @@
     onlyoffice_container_name: "onlyoffice-documentserver"
 
   vars_files:
-    - ../secrets.yaml  # Load the other more private information.
+    - ../secrets/global.yaml
+    - ../secrets/onlyoffice.yaml
+
 
   tasks:
 

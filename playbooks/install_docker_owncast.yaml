@@ -16,7 +16,8 @@
     owncast_selected_instance: "{{ owncast_instances | selectattr('owncast_name', 'equalto', owncast_target) | first }}"
 
   vars_files:
-    - ../secrets.yaml  # Load the other more private information.
+    - ../secrets/global.yaml
+    - ../secrets/owncast.yaml
 
 
   tasks:

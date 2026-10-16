@@ -14,7 +14,8 @@
     privatebin_container_name: "privatebin"
 
   vars_files:
-    - ../secrets.yaml  # Load the other more private information.
+    - ../secrets/global.yaml
+    - ../secrets/privatebin.yaml
 
 
   tasks:
