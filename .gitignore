@@ -6,3 +6,6 @@
 hosts.yaml
 secrets.yaml
 test.yaml
+
+# Other
+/secrets/*.yaml
