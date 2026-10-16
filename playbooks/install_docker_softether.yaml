@@ -1,0 +1,232 @@
+---
+- name: Install SoftEther VPN Server using Docker
+  hosts: public
+  become: true
+
+  vars:
+    softether_path: "/opt/softether"
+    softether_owner: root
+    softether_group: root
+
+    softether_image: "siomiz/softethervpn"
+    softether_image_version: "latest"
+    softether_container_name: "softether"
+    softether_setup_container_name: "softether-setup"
+
+    softether_vpncmd_server:
+      - docker
+      - exec
+      - "{{ softether_container_name }}"
+      - vpncmd
+      - localhost
+      - /SERVER
+      - "/PASSWORD:{{ softether_server_password }}"
+      - /CMD
+    softether_vpncmd_hub: "{{ softether_vpncmd_server[:6] + ['/ADMINHUB:' ~ softether_hub_name, '/PASSWORD:' ~ softether_server_password, '/CMD'] }}"
+
+  vars_files:
+    - ../secrets/global.yaml  # Load the other more private information.
+    - ../secrets/softether.yaml  # Load the other more private information.
+
+
+  tasks:
+
+    ### GENERAL TASKS AND PREPARATION
+    - name: Verify SoftEther secrets are defined
+      ansible.builtin.assert:
+        that:
+          - softether_server_password is defined
+          - softether_hub_password is defined
+          - softether_psk is defined
+          - softether_users is defined and softether_users | length > 0
+        fail_msg: "Define softether_server_password, softether_hub_password, softether_psk and softether_users in secrets.yaml"
+
+    - name: Install required packages
+      ansible.builtin.apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+          - python3-docker
+        state: present
+        update_cache: true
+
+    - name: Add Docker GPG key
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /usr/share/keyrings/docker.asc
+        mode: '0644'
+
+    - name: Add Docker repository
+      ansible.builtin.apt_repository:
+        repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+
+    - name: Install Docker engine and components
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        update_cache: true
+
+
+    ### --- CONTAINER CONFIG SETUP ---
+    - name: Ensure SoftEther directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ softether_owner }}"
+        group: "{{ softether_group }}"
+        mode: "0755"
+        recurse: true
+      loop:
+        - "{{ softether_path }}/config"
+        - "{{ softether_path }}/logs/server_log"
+        - "{{ softether_path }}/logs/security_log"
+
+    - name: Check if SoftEther config already exists
+      ansible.builtin.stat:
+        path: "{{ softether_path }}/config/vpn_server.config"
+      register: softether_config
+
+    # Runs the image once so it generates the base server config (admin passwords, PSK), then the config is copied out to the host.
+    - name: Run SoftEther initial setup container
+      community.docker.docker_container:
+        name: "{{ softether_setup_container_name }}"
+        image: "{{ softether_image }}:{{ softether_image_version }}"
+        state: started
+        detach: false
+        recreate: true
+        command: echo
+        env:
+          SPW: "{{ softether_server_password }}"
+          HPW: "{{ softether_hub_password }}"
+          PSK: "{{ softether_psk }}"
+      no_log: true
+      when: not softether_config.stat.exists
+
+    - name: Copy generated SoftEther config to host
+      ansible.builtin.command: "docker cp {{ softether_setup_container_name }}:/usr/vpnserver/vpn_server.config {{ softether_path }}/config/vpn_server.config"
+      args:
+        creates: "{{ softether_path }}/config/vpn_server.config"
+      when: not softether_config.stat.exists
+
+    - name: Remove SoftEther setup container
+      community.docker.docker_container:
+        name: "{{ softether_setup_container_name }}"
+        state: absent
+      when: not softether_config.stat.exists
+
+    - name: Restrict SoftEther config permissions
+      ansible.builtin.file:
+        path: "{{ softether_path }}/config/vpn_server.config"
+        owner: root
+        group: root
+        mode: "0600"
+
+
+    ### --- DOCKER ---
+    - name: Pull SoftEther Docker image
+      community.docker.docker_image:
+        name: "{{ softether_image }}:{{ softether_image_version }}"
+        source: pull
+        force_source: true
+
+    - name: Run SoftEther container
+      community.docker.docker_container:
+        name: "{{ softether_container_name }}"
+        image: "{{ softether_image }}:{{ softether_image_version }}"
+        restart_policy: always
+        state: started
+        recreate: true
+        capabilities:
+          - NET_ADMIN
+        ports: "{{ softether_ports }}"
+        volumes:  # Volumes keep the server configuration and logs persistent across container renewal.
+          - "{{ softether_path }}/config/vpn_server.config:/usr/vpnserver/vpn_server.config"
+          - "{{ softether_path }}/logs/server_log:/usr/vpnserver/server_log"
+          - "{{ softether_path }}/logs/security_log:/usr/vpnserver/security_log"
+
+
+    ### --- RECONCILE SERVER STATE ---
+    # Every run applies the declared state to the running server. Changes are saved into the config volume by SoftEther itself.
+    - name: Wait for SoftEther management port
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 5555
+        timeout: 60
+
+    - name: Configure L2TP/IPsec with pre-shared key
+      ansible.builtin.command:
+        argv: "{{ softether_vpncmd_server + ['IPsecEnable', '/L2TP:yes', '/L2TPRAW:no', '/ETHERIP:no', '/PSK:' ~ softether_psk, '/DEFAULTHUB:' ~ softether_hub_name] }}"
+      changed_when: false
+      no_log: true
+
+    - name: Set hub administrator password
+      ansible.builtin.command:
+        argv: "{{ softether_vpncmd_hub + ['SetHubPassword', softether_hub_password] }}"
+      changed_when: false
+      no_log: true
+
+    # Layer 2 only: clients get an address on the VPN adapter with no default gateway, and virtual NAT is off, so nothing is routed over the VPN.
+    - name: Configure SecureNAT DHCP without virtual NAT or default gateway
+      ansible.builtin.command:
+        argv: "{{ softether_vpncmd_hub + item }}"
+      loop:
+        - ["SecureNatEnable"]
+        - - "DhcpSet"
+          - "/START:{{ softether_dhcp_start }}"
+          - "/END:{{ softether_dhcp_end }}"
+          - "/MASK:{{ softether_dhcp_mask }}"
+          - "/EXPIRE:7200"
+          - "/GW:none"
+          - "/DNS:none"
+          - "/DNS2:none"
+          - "/DOMAIN:none"
+          - "/LOG:no"
+        - ["DhcpEnable"]
+        - ["NatDisable"]
+      changed_when: false
+      no_log: true
+
+    - name: Check which SoftEther users exist
+      ansible.builtin.command:
+        argv: "{{ softether_vpncmd_hub + ['UserGet', item.username] }}"
+      loop: "{{ softether_users }}"
+      register: softether_user_check
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Create missing SoftEther users
+      ansible.builtin.command:
+        argv: "{{ softether_vpncmd_hub + ['UserCreate', item.item.username, '/GROUP:none', '/REALNAME:none', '/NOTE:none'] }}"
+      loop: "{{ softether_user_check.results }}"
+      when: item.rc != 0
+      no_log: true
+
+    - name: Set password for each SoftEther user
+      ansible.builtin.command:
+        argv: "{{ softether_vpncmd_hub + ['UserPasswordSet', item.username, '/PASSWORD:' ~ item.password] }}"
+      loop: "{{ softether_users }}"
+      changed_when: false
+      no_log: true
+
+
+    ### --- VERIFY ---
+    - name: Wait for SoftEther container to start
+      ansible.builtin.pause:
+        seconds: 15
+
+    - name: Check SoftEther container is running
+      community.docker.docker_container_info:
+        name: "{{ softether_container_name }}"
+      register: softether_info
+      retries: 3
+      delay: 5
+      until: softether_info.exists and softether_info.container.State.Running
